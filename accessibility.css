@@ -231,3 +231,56 @@ dialog::backdrop { background: #0b172bcc; }
   .collection { padding: 24px 12px 8px; }
   .hero-art .facebook-art-icon { width: 80px; height: 80px; left: 0; top: -18px; }
 }
+
+/* Raised album links, with distinct colors for each destination. */
+.hero-actions .album-button {
+  --button-border: #edd3e8;
+  --button-tint: #fceaf3;
+  --button-ink: #81316f;
+  --button-edge: #e9cde1;
+  --button-shadow: #c1358414;
+  --button-hover-shadow: #c1358425;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 350px;
+  padding: 18px 20px;
+  border: 1px solid var(--button-border);
+  border-radius: 20px;
+  background: linear-gradient(135deg, #fff, var(--button-tint));
+  color: var(--button-ink);
+  font-family: Arial, Helvetica, sans-serif;
+  text-align: left;
+  text-decoration: none;
+  box-shadow: 0 5px 0 var(--button-edge), 0 12px 24px var(--button-shadow);
+  transition: transform .2s, box-shadow .2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.hero-actions .facebook-button {
+  --button-border: #c6dcf7; --button-tint: #e7f3ff;
+  --button-ink: #1555a0; --button-edge: #c4d9f2;
+  --button-shadow: #0866ff14; --button-hover-shadow: #0866ff25;
+}
+.hero-actions .wedding-button {
+  --button-border: #e5d7cc; --button-tint: #faf0e6;
+  --button-ink: #704c32; --button-edge: #e4d4c5;
+  --button-shadow: #704c3214; --button-hover-shadow: #704c3225;
+}
+.hero-actions .album-button:hover { transform: translateY(-3px); box-shadow: 0 8px 0 var(--button-edge), 0 16px 28px var(--button-hover-shadow); }
+.hero-actions .album-button:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--button-edge); }
+.album-button:focus-visible { outline: 3px solid var(--button-ink); outline-offset: 5px; }
+.album-button img, .album-button-heart { flex: none; width: 58px; height: 58px; object-fit: contain; }
+.album-button-heart { display: grid; place-items: center; font-size: 46px; line-height: 1; }
+.album-button-label { display: block; flex: 1; min-width: 0; }
+.album-button small { display: block; margin-bottom: 3px; color: var(--button-ink); font-size: 12px; letter-spacing: 1px; line-height: 1.5; }
+.album-button strong { display: block; font-size: 18px; line-height: 1.4; }
+.album-button svg { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hero-actions { gap: 20px; }
+.hero-actions > .primary { width: 100%; max-width: 350px; }
+@media (max-width: 700px) {
+  .hero-actions .album-button { padding: 16px; gap: 15px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-actions .album-button { transition: none; }
+}
