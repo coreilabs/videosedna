@@ -48,6 +48,10 @@ button:disabled { opacity: 1; color: #69625a; background: #eae3da; border-color:
 .hero-actions .photo-album-link { border: 2px solid var(--wine); background: #eee1dc; color: #582331; }
 .hero-actions .photo-album-link:hover { background: #e3cfc7; }
 .hero-actions .wedding-album-link { flex-basis: 100%; }
+.hero-actions .instagram-album-link { flex-basis: 100%; gap: 14px; padding: 10px 18px; border: 2px solid var(--wine); background: #fff4ee; color: #582331; text-align: left; }
+.hero-actions .instagram-album-link:hover { background: #eee1dc; }
+.instagram-album-link img { width: 56px; height: 56px; flex-shrink: 0; object-fit: contain; }
+.instagram-album-link > span:first-of-type { flex: 1; }
 @media (max-width: 650px) {
   .hero-actions { flex-direction: column; }
   .hero-actions a { width: 100%; }
