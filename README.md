@@ -42,6 +42,8 @@ A galeria virtualiza grupos de 24 cartões: grupos a mais de 1000 px da área vi
 
 `accessibility.css` define fontes principais e botões de 18 px, textos introdutórios de 20 px, maior contraste e alvos de toque de pelo menos 56 px nos controles. O player possui rótulos visíveis e reorganiza os controles em telas menores, permitindo rolagem vertical no diálogo para acessar todas as ações.
 
+Cada miniatura mostra um skeleton com brilho suave e indicador “Carregando…” até a imagem carregar e ser decodificada, sem mudar a altura do cartão. Em caso de erro, a animação termina e aparece “Prévia indisponível”; o vídeo continua acessível. A preferência de reduzir movimentos desativa as animações. A medição dos grupos virtualizados não cria imagens nem skeletons.
+
 Compartilhamento pelo sistema quando disponível, com cópia do link e campo selecionável como alternativas. O download aponta diretamente ao original no mesmo domínio; o comportamento de salvar depende do navegador, especialmente no iOS.
 
 ## Métricas de compartilhamento (Google Analytics 4)

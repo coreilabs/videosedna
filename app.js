@@ -22,13 +22,32 @@ const pathURL = path => new URL(path.split('/').map(encodeURIComponent).join('/'
 const thumbnailURL = path => `${pathURL(path)}?v=portrait-9x16-1`;
 const formatTime = value => Number.isFinite(value) ? `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, '0')}` : '0:00';
 function toast(message) { $('toast').textContent = message; $('toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('visible'), 3500); }
+function attachThumbnail(thumb, item) {
+  const status = document.createElement('div'); status.className = 'thumb-status'; status.setAttribute('aria-hidden', 'true');
+  const spinner = document.createElement('span'); spinner.className = 'thumb-spinner';
+  const label = document.createElement('span'); label.textContent = 'Carregando…';
+  status.append(spinner, label); thumb.append(status);
+  const unavailable = () => {
+    thumb.classList.remove('is-loading'); thumb.classList.add('is-error'); thumb.setAttribute('aria-busy', 'false');
+    spinner.remove(); label.textContent = 'Prévia indisponível';
+  };
+  if (!item.thumbnail) { unavailable(); return; }
+  thumb.classList.add('is-loading'); thumb.setAttribute('aria-busy', 'true');
+  const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.width = 360; img.height = 640;
+  img.onload = async () => {
+    try { await img.decode(); } catch { /* The loaded image can still be displayed. */ }
+    thumb.classList.remove('is-loading'); thumb.setAttribute('aria-busy', 'false'); status.remove();
+  };
+  img.onerror = () => { img.remove(); unavailable(); };
+  thumb.append(img); img.src = thumbnailURL(item.thumbnail);
+}
 function createCards(items, includeImages = true) {
   const fragment = document.createDocumentFragment();
   items.forEach(item => {
     const button = document.createElement('button'); button.className = 'card'; button.setAttribute('aria-label', `Assistir ${item.title.toLowerCase()}`);
     button.dataset.videoId = item.id;
     const thumb = document.createElement('div'); thumb.className = 'thumb';
-    if (includeImages && item.thumbnail) { const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.width = 360; img.height = 640; img.onerror = () => img.remove(); img.src = thumbnailURL(item.thumbnail); thumb.append(img); }
+    if (includeImages) attachThumbnail(thumb, item);
     const play = document.createElement('span'); play.className = 'card-play'; play.textContent = '▶'; play.setAttribute('aria-hidden', 'true');
     const number = document.createElement('span'); number.className = 'card-number'; number.textContent = item.title.replace('Recordação ', 'Nº '); number.setAttribute('aria-hidden', 'true');
     thumb.append(play, number);

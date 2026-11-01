@@ -76,6 +76,50 @@ button:disabled { opacity: 1; color: #69625a; background: #eae3da; border-color:
 }
 .thumb { aspect-ratio: 9 / 16; background: #201b18; }
 .thumb img { object-fit: contain; }
+.thumb img { transition: opacity .2s ease; }
+.thumb.is-loading { background: #e7dbd1; }
+.thumb.is-loading img { opacity: 0; }
+.thumb.is-loading::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(100deg, transparent 20%, #fff8edb3 50%, transparent 80%);
+  transform: translateX(-100%);
+  animation: thumbnail-shimmer 1.8s ease-in-out infinite;
+}
+.thumb.is-loading::after { opacity: 0; }
+.thumb.is-loading .card-play, .thumb.is-loading .card-number { visibility: hidden; }
+.thumb-status {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 10px;
+  text-align: center;
+  color: #582331;
+  font-size: 18px;
+  line-height: 1.5;
+}
+.thumb-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #c6aab0;
+  border-top-color: #793f4b;
+  border-radius: 50%;
+  animation: thumbnail-spin .9s linear infinite;
+}
+.thumb.is-error .thumb-status { color: #fff8ed; }
+@keyframes thumbnail-shimmer { to { transform: translateX(100%); } }
+@keyframes thumbnail-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .thumb.is-loading::before, .thumb-spinner { animation: none; }
+  .thumb img { transition: none; }
+}
 .card:hover img { transform: none; }
 .card:hover .thumb { box-shadow: 0 0 0 3px var(--wine); }
 .photo-image, .photo-back img { background: #201b18; }
