@@ -7,7 +7,8 @@ Galeria estática em HTML, CSS e JavaScript, preparada para `https://coreilabs.g
 1. Adicione os vídeos em `gallery/` sem renomear os antigos: o nome original determina o identificador permanente do link.
 2. Gere miniaturas com `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-thumbnails.ps1`. Instalação do FFmpeg e opções no `AGENTS.md`.
 3. Execute `node scripts/generate-catalog.cjs` para atualizar `videos.json`.
-4. Publique os arquivos atualizados, incluindo `gallery/`, `thumbnails/` e `videos.json`.
+4. Execute `node scripts/version-assets.cjs` depois da última alteração nos scripts e estilos.
+5. Publique os arquivos atualizados, incluindo `index.html`, `gallery/`, `thumbnails/` e `videos.json`.
 
 As miniaturas são JPEG verticais 9:16 (360 × 640 px), com o quadro inteiro preservado. Vídeos horizontais recebem preenchimento escuro. Para substituir todas as capas existentes pelo formato atual, execute `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\generate-thumbnails.ps1 -Force`. Os cartões usam a mesma proporção no desktop e no celular, sem recortar as imagens.
 
@@ -18,6 +19,8 @@ O catálogo usa nomes neutros e numeração por ordem dos arquivos, pois os víd
 Execute `node scripts/serve.cjs` e abra `http://127.0.0.1:8766`. Este servidor local suporta requisições parciais (HTTP Range), necessárias para avançar e retroceder vídeos. O servidor embutido do PHP pode não permitir avançar vídeos. Abrir o HTML com `file://` não permite carregar o catálogo em alguns navegadores. O helper local não é necessário no GitHub Pages.
 
 ## GitHub Pages
+
+Antes de cada publicação com alterações em CSS ou JavaScript, execute `node scripts/version-assets.cjs`. O helper atualiza as URLs dos três arquivos locais com um hash do conteúdo (`?v=...`). Quando o visitante recebe o HTML atualizado, o navegador solicita a versão nova dos recursos modificados, sem exigir que ele limpe o cache. Recursos inalterados mantêm suas URLs e podem continuar em cache. O catálogo também é revalidado a cada carregamento do álbum. Abas já abertas precisam ser recarregadas; a disponibilização do HTML novo depende da publicação e do cache do GitHub Pages.
 
 Envie o projeto para o repositório `coreilabs/videosedna`. Em **Settings → Pages**, selecione publicação pela branch desejada, pasta **/(root)**. Não há build nem dependências de produção. O `.nojekyll` permite servir os arquivos diretamente. Caminhos relativos suportam o prefixo `/videosedna/`.
 

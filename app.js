@@ -39,7 +39,7 @@ function filterGallery() {
 async function loadCatalog() {
   $('retry').hidden = true; $('load-state').textContent = 'Preparando suas recordações…';
   try {
-    const response = await fetch('videos.json'); if (!response.ok) throw new Error('Catálogo indisponível');
+    const response = await fetch('videos.json', { cache: 'no-cache' }); if (!response.ok) throw new Error('Catálogo indisponível');
     videos = await response.json(); $('count').textContent = `${videos.length} recordações`;
     $('surprise').disabled = !videos.length; filterGallery();
     const covers = videos.filter(item => item.thumbnail);
