@@ -1,6 +1,27 @@
 /* Readable defaults for every visitor, without requiring an accessibility mode. */
 :root { --muted: #5c554e; --line: #c8bcb0; }
 body { font-size: 18px; line-height: 1.65; }
+body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+.creator-bar {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 4;
+  min-height: 64px;
+  padding: 16px 12px calc(16px + env(safe-area-inset-bottom));
+  border-top: 1px solid #967a73;
+  background: #eee1dc;
+  color: #582331;
+  font-size: 18px;
+  line-height: 1.6;
+  text-align: center;
+}
+.creator-bar strong { font-weight: 800; }
+.toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
+@media (max-width: 360px) {
+  body { padding-bottom: calc(108px + env(safe-area-inset-bottom)); }
+  .creator-bar { padding-inline: 20px; }
+  .toast { bottom: calc(120px + env(safe-area-inset-bottom)); }
+}
 button, input, a { overflow-wrap: anywhere; }
 .primary, .secondary, .text-button, .icon-button {
   min-height: 56px;
