@@ -47,6 +47,7 @@ button:disabled { opacity: 1; color: #69625a; background: #eae3da; border-color:
 .hero-actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
 .hero-actions .photo-album-link { border: 2px solid var(--wine); background: #eee1dc; color: #582331; }
 .hero-actions .photo-album-link:hover { background: #e3cfc7; }
+.hero-actions .wedding-album-link { flex-basis: 100%; }
 @media (max-width: 650px) {
   .hero-actions { flex-direction: column; }
   .hero-actions a { width: 100%; }
