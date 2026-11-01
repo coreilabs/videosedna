@@ -20,6 +20,8 @@ Execute `node scripts/serve.cjs` e abra `http://127.0.0.1:8766`. Este servidor l
 
 ## GitHub Pages
 
+Para renovar as URLs e gerar uma alteração para commit mesmo sem mudanças no conteúdo dos recursos, execute `node scripts/version-assets.cjs --force`. Isso cria uma versão de publicação no HTML; execuções normais posteriores preservam essa versão enquanto o conteúdo não mudar. Não é necessário modificar artificialmente os arquivos CSS ou JavaScript.
+
 Antes de cada publicação com alterações em CSS ou JavaScript, execute `node scripts/version-assets.cjs`. O helper atualiza as URLs dos três arquivos locais com um hash do conteúdo (`?v=...`). Quando o visitante recebe o HTML atualizado, o navegador solicita a versão nova dos recursos modificados, sem exigir que ele limpe o cache. Recursos inalterados mantêm suas URLs e podem continuar em cache. O catálogo também é revalidado a cada carregamento do álbum. Abas já abertas precisam ser recarregadas; a disponibilização do HTML novo depende da publicação e do cache do GitHub Pages.
 
 Envie o projeto para o repositório `coreilabs/videosedna`. Em **Settings → Pages**, selecione publicação pela branch desejada, pasta **/(root)**. Não há build nem dependências de produção. O `.nojekyll` permite servir os arquivos diretamente. Caminhos relativos suportam o prefixo `/videosedna/`.
