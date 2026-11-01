@@ -23,6 +23,13 @@ button:disabled { opacity: 1; color: #69625a; background: #eae3da; border-color:
 .eyebrow, .hero-copy .eyebrow { font-size: 14px; letter-spacing: 1.2px; }
 .intro, .hero .intro { font-size: 20px; }
 .hero-note { font-size: 16px; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
+.hero-actions .photo-album-link { border: 2px solid var(--wine); background: #eee1dc; color: #582331; }
+.hero-actions .photo-album-link:hover { background: #e3cfc7; }
+@media (max-width: 650px) {
+  .hero-actions { flex-direction: column; }
+  .hero-actions a { width: 100%; }
+}
 .collection-head p:not(.eyebrow) { font-size: 18px; }
 .count { font-size: 16px; }
 .search { min-height: 60px; max-width: 580px; border-color: #967a73; }
