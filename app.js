@@ -1,0 +1,94 @@
+'use strict';
+const $ = id => document.getElementById(id);
+const video = $('video'), viewer = $('viewer');
+let videos = [], filtered = [], rendered = 0, current = -1, lastFocus, toastTimer;
+const batch = 24;
+const scrollObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
+  if (entries.some(entry => entry.isIntersecting) && !viewer.open && rendered < filtered.length) renderMore();
+}, { rootMargin: '500px 0px' }) : null;
+scrollObserver?.observe($('scroll-sentinel'));
+const pathURL = path => new URL(path.split('/').map(encodeURIComponent).join('/'), document.baseURI).href;
+const thumbnailURL = path => `${pathURL(path)}?v=portrait-9x16-1`;
+const formatTime = value => Number.isFinite(value) ? `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, '0')}` : '0:00';
+function toast(message) { $('toast').textContent = message; $('toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('visible'), 3500); }
+function renderMore() {
+  const fragment = document.createDocumentFragment();
+  filtered.slice(rendered, rendered + batch).forEach(item => {
+    const button = document.createElement('button'); button.className = 'card'; button.setAttribute('aria-label', `Assistir ${item.title.toLowerCase()}`);
+    const thumb = document.createElement('div'); thumb.className = 'thumb';
+    if (item.thumbnail) { const img = new Image(); img.src = thumbnailURL(item.thumbnail); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.width = 360; img.height = 640; img.onerror = () => img.remove(); thumb.append(img); }
+    const play = document.createElement('span'); play.className = 'card-play'; play.textContent = '▶'; play.setAttribute('aria-hidden', 'true');
+    const number = document.createElement('span'); number.className = 'card-number'; number.textContent = item.title.replace('Recordação ', 'Nº '); number.setAttribute('aria-hidden', 'true');
+    thumb.append(play, number);
+    const title = document.createElement('div'); title.className = 'card-title'; title.textContent = item.title;
+    const arrow = document.createElement('span'); arrow.textContent = '↗'; arrow.setAttribute('aria-hidden', 'true'); title.append(arrow);
+    button.append(thumb, title); button.addEventListener('click', () => openVideo(videos.indexOf(item))); fragment.append(button);
+  });
+  $('gallery').append(fragment); rendered = Math.min(rendered + batch, filtered.length);
+  const recordLabel = filtered.length === 1 ? 'recordação' : 'recordações';
+  $('shown').textContent = filtered.length ? `${rendered} de ${filtered.length} ${recordLabel}` : '';
+  $('load-more').hidden = rendered >= filtered.length;
+  $('scroll-hint').hidden = !scrollObserver || rendered >= filtered.length;
+  if (rendered && rendered === filtered.length) $('shown').textContent = `${rendered} de ${filtered.length} ${recordLabel} — você chegou ao fim.`;
+}
+function filterGallery() {
+  const query = $('search').value.trim().toLocaleLowerCase('pt-BR');
+  filtered = videos.filter(item => item.title.toLocaleLowerCase('pt-BR').includes(query)); rendered = 0; $('gallery').replaceChildren();
+  $('load-state').textContent = filtered.length ? '' : 'Nenhuma recordação encontrada. Tente outro número.'; renderMore();
+}
+async function loadCatalog() {
+  $('retry').hidden = true; $('load-state').textContent = 'Preparando suas recordações…';
+  try {
+    const response = await fetch('videos.json'); if (!response.ok) throw new Error('Catálogo indisponível');
+    videos = await response.json(); $('count').textContent = `${videos.length} recordações`;
+    $('surprise').disabled = !videos.length; filterGallery();
+    const covers = videos.filter(item => item.thumbnail);
+    if (covers.length) { $('hero-front').src = thumbnailURL(covers[Math.min(2, covers.length - 1)].thumbnail); $('hero-back').src = thumbnailURL(covers[Math.min(4, covers.length - 1)].thumbnail); }
+    openFromURL();
+  } catch (error) { $('load-state').textContent = 'Não foi possível carregar o álbum. Verifique sua conexão e tente novamente.'; $('count').textContent = 'Álbum indisponível'; $('retry').hidden = false; }
+}
+function updateURL(id) { const url = new URL(location.href); if (id) url.searchParams.set('video', id); else url.searchParams.delete('video'); history.replaceState(null, '', url); }
+function openVideo(index, changeURL = true) {
+  if (index < 0 || index >= videos.length) return;
+  if (!viewer.open) { lastFocus = document.activeElement; viewer.showModal(); }
+  current = index; const item = videos[index]; video.pause(); video.src = pathURL(item.file); video.poster = item.thumbnail ? thumbnailURL(item.thumbnail) : ''; video.load();
+  viewer.setAttribute('aria-label', `Player — ${item.title}`);
+  $('seek').value = 0; $('seek').disabled = true; $('time').textContent = '0:00 / 0:00'; $('player-message').textContent = ''; $('big-play').hidden = false;
+  $('share-fallback').hidden = true; $('download').href = pathURL(item.file); $('download').download = item.file.split('/').pop();
+  $('previous').disabled = index === 0; $('next').disabled = index === videos.length - 1;
+  video.classList.remove('portrait'); $('stage').classList.remove('swapping'); void $('stage').offsetWidth; $('stage').classList.add('swapping');
+  if (changeURL) updateURL(item.id);
+}
+function closeViewer(changeURL = true) { video.pause(); video.removeAttribute('src'); video.load(); if (viewer.open) viewer.close(); if (changeURL) updateURL(null); lastFocus?.focus({ preventScroll: true }); }
+function openFromURL() { const id = new URL(location.href).searchParams.get('video'); if (!id) { if (viewer.open) closeViewer(false); return; } const index = videos.findIndex(item => item.id === id); if (index >= 0) openVideo(index, false); else toast('Esta recordação não foi encontrada no álbum.'); }
+async function togglePlay() { if (!video.paused) { video.pause(); return; } try { await video.play(); } catch { $('player-message').textContent = 'Não foi possível reproduzir. Tente novamente ou baixe o vídeo.'; } }
+function syncPlay() { const paused = video.paused; $('play').textContent = paused ? '▶ Reproduzir' : 'Ⅱ Pausar'; $('play').setAttribute('aria-label', paused ? 'Reproduzir' : 'Pausar'); $('big-play').hidden = !paused; }
+async function copyShare() { const url = $('share-url').value; try { await navigator.clipboard.writeText(url); $('share-fallback').hidden = true; toast('Link copiado!'); } catch { $('share-fallback').hidden = false; $('share-url').focus(); $('share-url').select(); toast('Selecione e copie o link da recordação.'); } }
+async function shareCurrent() {
+  const item = videos[current]; if (!item) return;
+  const url = new URL(location.href); url.searchParams.set('video', item.id); url.hash = ''; $('share-url').value = url.href;
+  if (navigator.share) { try { await navigator.share({ title: `${item.title} — Edna Moreira`, text: 'Uma recordação para compartilhar com carinho.', url: url.href }); return; } catch (error) { if (error.name === 'AbortError') return; } }
+  await copyShare();
+}
+$('load-more').addEventListener('click', () => { const nextIndex = rendered; renderMore(); $('gallery').children[nextIndex]?.focus({ preventScroll: true }); });
+$('search').addEventListener('input', filterGallery); $('retry').addEventListener('click', loadCatalog);
+$('surprise').addEventListener('click', () => openVideo(Math.floor(Math.random() * videos.length)));
+$('close').addEventListener('click', () => closeViewer()); viewer.addEventListener('cancel', event => { event.preventDefault(); closeViewer(); });
+viewer.addEventListener('click', event => { if (event.target === viewer) { const bounds = viewer.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeViewer(); } });
+$('play').addEventListener('click', togglePlay); $('big-play').addEventListener('click', togglePlay); video.addEventListener('click', togglePlay);
+video.controls = false;
+video.addEventListener('play', () => { $('player-message').textContent = ''; syncPlay(); }); video.addEventListener('pause', syncPlay); video.addEventListener('ended', syncPlay);
+video.addEventListener('loadedmetadata', () => { video.classList.toggle('portrait', video.videoHeight > video.videoWidth); $('time').textContent = `0:00 / ${formatTime(video.duration)}`; $('seek').disabled = !Number.isFinite(video.duration) || video.duration <= 0; });
+video.addEventListener('timeupdate', () => { $('time').textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`; $('seek').value = video.duration ? video.currentTime / video.duration * 1000 : 0; });
+video.addEventListener('waiting', () => { $('player-message').textContent = 'Carregando vídeo…'; }); video.addEventListener('playing', () => { $('player-message').textContent = ''; });
+video.addEventListener('error', () => { if (video.getAttribute('src')) $('player-message').textContent = 'Não foi possível carregar este vídeo. Tente baixar ou escolha outra recordação.'; });
+$('seek').addEventListener('input', () => { if (Number.isFinite(video.duration)) video.currentTime = Number($('seek').value) / 1000 * video.duration; });
+$('mute').addEventListener('click', () => { video.muted = !video.muted; $('mute').textContent = video.muted ? '×♪ Sem som' : '♪ Som ligado'; $('mute').setAttribute('aria-label', video.muted ? 'Ativar som' : 'Silenciar'); $('mute').setAttribute('aria-pressed', String(video.muted)); });
+$('fullscreen').addEventListener('click', async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else if (video.requestFullscreen) await video.requestFullscreen(); else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen(); else toast('Use a opção de tela cheia do seu navegador.'); } catch { toast('Tela cheia indisponível neste navegador.'); } });
+$('previous').addEventListener('click', () => openVideo(current - 1)); $('next').addEventListener('click', () => openVideo(current + 1)); $('share').addEventListener('click', shareCurrent); $('copy').addEventListener('click', copyShare);
+viewer.addEventListener('keydown', event => { if (event.target.matches('input')) return; if (event.key === 'ArrowRight') { event.preventDefault(); openVideo(current + 1); } if (event.key === 'ArrowLeft') { event.preventDefault(); openVideo(current - 1); } if (event.key === ' ' && !event.target.matches('button,a')) { event.preventDefault(); togglePlay(); } });
+let touchStart;
+$('stage').addEventListener('touchstart', event => { if (event.touches.length === 1) touchStart = { x: event.touches[0].clientX, y: event.touches[0].clientY }; }, { passive: true });
+$('stage').addEventListener('touchend', event => { if (!touchStart) return; const deltaX = event.changedTouches[0].clientX - touchStart.x; const deltaY = event.changedTouches[0].clientY - touchStart.y; if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) openVideo(current + (deltaX < 0 ? 1 : -1)); touchStart = null; }, { passive: true });
+$('stage').addEventListener('touchcancel', () => { touchStart = null; }, { passive: true });
+window.addEventListener('popstate', openFromURL); loadCatalog();
