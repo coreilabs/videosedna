@@ -2,6 +2,7 @@
 const $ = id => document.getElementById(id);
 const video = $('video'), viewer = $('viewer');
 let videos = [], filtered = [], rendered = 0, current = -1, lastFocus, toastTimer;
+let shareContext = null, shareBusy = false;
 const batch = 24;
 const scrollObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
   if (entries.some(entry => entry.isIntersecting) && !viewer.open && rendered < filtered.length) renderMore();
@@ -54,7 +55,7 @@ function openVideo(index, changeURL = true) {
   current = index; const item = videos[index]; video.pause(); video.src = pathURL(item.file); video.poster = item.thumbnail ? thumbnailURL(item.thumbnail) : ''; video.load();
   viewer.setAttribute('aria-label', `Player — ${item.title}`);
   $('seek').value = 0; $('seek').disabled = true; $('time').textContent = '0:00 / 0:00'; $('player-message').textContent = ''; $('big-play').hidden = false;
-  $('share-fallback').hidden = true; $('download').href = pathURL(item.file); $('download').download = item.file.split('/').pop();
+  $('share-fallback').hidden = true; shareContext = null; $('download').href = pathURL(item.file); $('download').download = item.file.split('/').pop();
   $('previous').disabled = index === 0; $('next').disabled = index === videos.length - 1;
   video.classList.remove('portrait'); $('stage').classList.remove('swapping'); void $('stage').offsetWidth; $('stage').classList.add('swapping');
   if (changeURL) updateURL(item.id);
@@ -63,13 +64,55 @@ function closeViewer(changeURL = true) { video.pause(); video.removeAttribute('s
 function openFromURL() { const id = new URL(location.href).searchParams.get('video'); if (!id) { if (viewer.open) closeViewer(false); return; } const index = videos.findIndex(item => item.id === id); if (index >= 0) openVideo(index, false); else toast('Esta recordação não foi encontrada no álbum.'); }
 async function togglePlay() { if (!video.paused) { video.pause(); return; } try { await video.play(); } catch { $('player-message').textContent = 'Não foi possível reproduzir. Tente novamente ou baixe o vídeo.'; } }
 function syncPlay() { const paused = video.paused; $('play').textContent = paused ? '▶ Reproduzir' : 'Ⅱ Pausar'; $('play').setAttribute('aria-label', paused ? 'Reproduzir' : 'Pausar'); $('big-play').hidden = !paused; }
-async function copyShare() { const url = $('share-url').value; try { await navigator.clipboard.writeText(url); $('share-fallback').hidden = true; toast('Link copiado!'); } catch { $('share-fallback').hidden = false; $('share-url').focus(); $('share-url').select(); toast('Selecione e copie o link da recordação.'); } }
-async function shareCurrent() {
-  const item = videos[current]; if (!item) return;
-  const url = new URL(location.href); url.searchParams.set('video', item.id); url.hash = ''; $('share-url').value = url.href;
-  if (navigator.share) { try { await navigator.share({ title: `${item.title} — Edna Moreira`, text: 'Uma recordação para compartilhar com carinho.', url: url.href }); return; } catch (error) { if (error.name === 'AbortError') return; } }
-  await copyShare();
+function trackVideoEvent(name, item, parameters = {}) {
+  if (!item || typeof window.gtag !== 'function') return;
+  try {
+    window.gtag('event', name, {
+      send_to: 'G-Z8FKSNN38X', content_type: 'video', item_id: item.id,
+      video_title: item.title, ...parameters
+    });
+  } catch { /* Analytics must never interrupt sharing. */ }
 }
+function recordShare(context, method) {
+  if (!context || context.recorded) return;
+  context.recorded = true;
+  trackVideoEvent('share', context.item, { method });
+}
+async function copyShare() {
+  const context = shareContext; if (!context) return;
+  try {
+    await navigator.clipboard.writeText(context.url);
+    recordShare(context, 'copy_link');
+    if (shareContext === context) $('share-fallback').hidden = true;
+    toast('Link copiado!');
+  } catch {
+    if (shareContext !== context) return;
+    $('share-fallback').hidden = false; $('share-url').focus(); $('share-url').select();
+    toast('Selecione e copie o link da recordação.');
+  }
+}
+async function shareCurrent() {
+  const item = videos[current]; if (!item || shareBusy) return;
+  shareBusy = true; $('share').disabled = true;
+  const url = new URL(location.href); url.searchParams.set('video', item.id); url.hash = '';
+  const context = { item, url: url.href, recorded: false }; shareContext = context;
+  $('share-url').value = context.url;
+  trackVideoEvent('video_share_click', item);
+  try {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `${item.title} — Edna Moreira`, text: 'Uma recordação para compartilhar com carinho.', url: context.url });
+        recordShare(context, 'native_share'); return;
+      } catch (error) { if (error.name === 'AbortError') return; }
+    }
+    await copyShare();
+  } finally { shareBusy = false; $('share').disabled = false; }
+}
+$('share-url').addEventListener('copy', event => {
+  const context = shareContext;
+  if ($('share-url').selectionEnd <= $('share-url').selectionStart) return;
+  setTimeout(() => { if (!event.defaultPrevented) recordShare(context, 'manual_copy'); }, 0);
+});
 $('load-more').addEventListener('click', () => { const nextIndex = rendered; renderMore(); $('gallery').children[nextIndex]?.focus({ preventScroll: true }); });
 $('search').addEventListener('input', filterGallery); $('retry').addEventListener('click', loadCatalog);
 $('surprise').addEventListener('click', () => openVideo(Math.floor(Math.random() * videos.length)));

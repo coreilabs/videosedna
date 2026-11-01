@@ -11,6 +11,7 @@ Site estático destinado a https://coreilabs.github.io/videosedna/.
 - Imagem Open Graph fornecida pelo usuário: `imgs/opengraph.webp`, 1200 × 630 px. Preservar as referências nas tags Open Graph e Twitter.
 - Preservar o infinite scroll em lotes de 24 via `IntersectionObserver`, com botão alternativo acessível e sem mover o foco no carregamento automático.
 - Preservar os padrões de legibilidade em `accessibility.css`: botões e textos principais com 18 px ou mais, controles com altura mínima de 56 px e rótulos visíveis. Não reduzir fontes ou áreas de toque para caber em telas menores; reorganizar o layout.
+- Analytics de compartilhamento: `video_share_click` mede tentativas; `share` mede retorno da API nativa ou cópia do link, nunca o cancelamento. Não duplicar o evento por tentativa nem atribuir o evento ao vídeo novo caso o visitante troque de vídeo durante uma operação assíncrona. Manter a tag e o `send_to` em `G-Z8FKSNN38X`. Durante testes, bloquear requisições do Google Analytics e inspecionar os eventos localmente para não contaminar produção.
 
 ## Extração local de miniaturas
 
