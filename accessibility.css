@@ -58,6 +58,22 @@ button:disabled { opacity: 1; color: #69625a; background: #eae3da; border-color:
 .search input::placeholder { color: #5c554e; opacity: 1; }
 .card-title { font-size: 18px; line-height: 1.5; font-weight: 600; }
 .card-title span { display: none; }
+.gallery { display: block; }
+.gallery-group {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 28px 20px;
+  margin-bottom: 28px;
+}
+.gallery-group:last-child { margin-bottom: 0; }
+.gallery-group.is-placeholder { display: block; position: relative; }
+.restore-group { position: absolute; inset: 0 auto auto 0; max-width: 100%; }
+@media (max-width: 1000px) {
+  .gallery-group { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+  .gallery-group { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 12px; margin-bottom: 22px; }
+}
 .thumb { aspect-ratio: 9 / 16; background: #201b18; }
 .thumb img { object-fit: contain; }
 .card:hover img { transform: none; }

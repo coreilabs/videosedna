@@ -4,6 +4,16 @@ const video = $('video'), viewer = $('viewer');
 let videos = [], filtered = [], rendered = 0, current = -1, lastFocus, toastTimer;
 let shareContext = null, shareBusy = false;
 const batch = 24;
+const windowMargin = 1000;
+let galleryGroups = [], resizeTimer, cleanupFrame;
+const groupByElement = new WeakMap();
+const groupObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    const group = groupByElement.get(entry.target);
+    if (!group || !entry.target.isConnected) return;
+    if (entry.isIntersecting) mountGroup(group); else unmountGroup(group);
+  });
+}, { rootMargin: `${windowMargin}px 0px` }) : null;
 const scrollObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
   if (entries.some(entry => entry.isIntersecting) && !viewer.open && rendered < filtered.length) renderMore();
 }, { rootMargin: '500px 0px' }) : null;
@@ -12,12 +22,13 @@ const pathURL = path => new URL(path.split('/').map(encodeURIComponent).join('/'
 const thumbnailURL = path => `${pathURL(path)}?v=portrait-9x16-1`;
 const formatTime = value => Number.isFinite(value) ? `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, '0')}` : '0:00';
 function toast(message) { $('toast').textContent = message; $('toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('visible'), 3500); }
-function renderMore() {
+function createCards(items, includeImages = true) {
   const fragment = document.createDocumentFragment();
-  filtered.slice(rendered, rendered + batch).forEach(item => {
+  items.forEach(item => {
     const button = document.createElement('button'); button.className = 'card'; button.setAttribute('aria-label', `Assistir ${item.title.toLowerCase()}`);
+    button.dataset.videoId = item.id;
     const thumb = document.createElement('div'); thumb.className = 'thumb';
-    if (item.thumbnail) { const img = new Image(); img.src = thumbnailURL(item.thumbnail); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.width = 360; img.height = 640; img.onerror = () => img.remove(); thumb.append(img); }
+    if (includeImages && item.thumbnail) { const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.width = 360; img.height = 640; img.onerror = () => img.remove(); img.src = thumbnailURL(item.thumbnail); thumb.append(img); }
     const play = document.createElement('span'); play.className = 'card-play'; play.textContent = '▶'; play.setAttribute('aria-hidden', 'true');
     const number = document.createElement('span'); number.className = 'card-number'; number.textContent = item.title.replace('Recordação ', 'Nº '); number.setAttribute('aria-hidden', 'true');
     thumb.append(play, number);
@@ -25,16 +36,94 @@ function renderMore() {
     const arrow = document.createElement('span'); arrow.textContent = '↗'; arrow.setAttribute('aria-hidden', 'true'); title.append(arrow);
     button.append(thumb, title); button.addEventListener('click', () => openVideo(videos.indexOf(item))); fragment.append(button);
   });
-  $('gallery').append(fragment); rendered = Math.min(rendered + batch, filtered.length);
+  return fragment;
+}
+function mountGroup(group, measureOnly = false) {
+  if (group.mounted) return;
+  group.element.classList.remove('is-placeholder');
+  group.element.style.height = '';
+  group.element.replaceChildren(createCards(group.items, !measureOnly));
+  group.mounted = true;
+}
+function unmountGroup(group) {
+  if (!group.mounted || !groupObserver) return;
+  // Keep the focused card and the player opener alive for keyboard/focus return.
+  if (group.element.contains(document.activeElement) || (viewer.open && lastFocus && group.element.contains(lastFocus))) return;
+  const height = group.element.getBoundingClientRect().height;
+  const restore = document.createElement('button');
+  restore.className = 'secondary restore-group';
+  restore.textContent = `Mostrar ${group.items[0].title} até ${group.items.at(-1).title}`;
+  const restoreFocus = () => {
+    mountGroup(group);
+    const card = group.element.querySelector('.card');
+    card?.focus({ preventScroll: true });
+    card?.scrollIntoView({ block: 'center', behavior: 'instant' });
+  };
+  restore.addEventListener('focus', restoreFocus);
+  restore.addEventListener('click', restoreFocus);
+  group.element.style.height = `${height}px`;
+  group.element.classList.add('is-placeholder');
+  // No references to detached cards/images are kept; the browser may free them.
+  group.element.replaceChildren(restore);
+  group.mounted = false;
+}
+function updateGalleryWindow() {
+  if (!groupObserver) return;
+  galleryGroups.forEach(group => {
+    const bounds = group.element.getBoundingClientRect();
+    if (bounds.bottom >= -windowMargin && bounds.top <= innerHeight + windowMargin) mountGroup(group);
+    else unmountGroup(group);
+  });
+}
+function scheduleGalleryCleanup() {
+  if (cleanupFrame) return;
+  cleanupFrame = requestAnimationFrame(() => { cleanupFrame = null; updateGalleryWindow(); });
+}
+function refreshGroupSizes() {
+  if (!groupObserver) return;
+  const anchor = [...$('gallery').querySelectorAll('.card')].find(card => {
+    const bounds = card.getBoundingClientRect(); return bounds.bottom > 0 && bounds.top < innerHeight;
+  });
+  const anchorTop = anchor?.getBoundingClientRect().top;
+  // Re-measure placeholders at the new column width instead of retaining stale heights.
+  galleryGroups.forEach(group => {
+    const wasMounted = group.mounted;
+    mountGroup(group, !wasMounted);
+    if (!wasMounted) unmountGroup(group);
+  });
+  if (anchor?.isConnected) window.scrollBy({ top: anchor.getBoundingClientRect().top - anchorTop, behavior: 'instant' });
+  updateGalleryWindow();
+}
+if ('ResizeObserver' in window) {
+  let galleryWidth = $('gallery').getBoundingClientRect().width;
+  new ResizeObserver(entries => {
+    const width = entries[0].contentRect.width;
+    if (width === galleryWidth) return;
+    galleryWidth = width; clearTimeout(resizeTimer); resizeTimer = setTimeout(refreshGroupSizes, 120);
+  }).observe($('gallery'));
+} else window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(refreshGroupSizes, 120); });
+document.addEventListener('focusin', scheduleGalleryCleanup);
+function renderMore() {
+  const items = filtered.slice(rendered, rendered + batch);
+  if (!items.length) return;
+  const element = document.createElement('div'); element.className = 'gallery-group';
+  element.setAttribute('role', 'group');
+  element.setAttribute('aria-label', `${items[0].title} até ${items.at(-1).title}`);
+  const group = { element, items, mounted: false };
+  galleryGroups.push(group); groupByElement.set(element, group);
+  $('gallery').append(element); mountGroup(group); groupObserver?.observe(element);
+  rendered = Math.min(rendered + batch, filtered.length);
   const recordLabel = filtered.length === 1 ? 'recordação' : 'recordações';
   $('shown').textContent = filtered.length ? `${rendered} de ${filtered.length} ${recordLabel}` : '';
   $('load-more').hidden = rendered >= filtered.length;
   $('scroll-hint').hidden = !scrollObserver || rendered >= filtered.length;
   if (rendered && rendered === filtered.length) $('shown').textContent = `${rendered} de ${filtered.length} ${recordLabel} — você chegou ao fim.`;
+  return group;
 }
 function filterGallery() {
   const query = $('search').value.trim().toLocaleLowerCase('pt-BR');
-  filtered = videos.filter(item => item.title.toLocaleLowerCase('pt-BR').includes(query)); rendered = 0; $('gallery').replaceChildren();
+  filtered = videos.filter(item => item.title.toLocaleLowerCase('pt-BR').includes(query)); rendered = 0;
+  groupObserver?.disconnect(); galleryGroups = []; $('gallery').replaceChildren();
   $('load-state').textContent = filtered.length ? '' : 'Nenhuma recordação encontrada. Tente outro número.'; renderMore();
 }
 async function loadCatalog() {
@@ -60,7 +149,14 @@ function openVideo(index, changeURL = true) {
   video.classList.remove('portrait'); $('stage').classList.remove('swapping'); void $('stage').offsetWidth; $('stage').classList.add('swapping');
   if (changeURL) updateURL(item.id);
 }
-function closeViewer(changeURL = true) { video.pause(); video.removeAttribute('src'); video.load(); if (viewer.open) viewer.close(); if (changeURL) updateURL(null); lastFocus?.focus({ preventScroll: true }); }
+function closeViewer(changeURL = true) {
+  video.pause(); video.removeAttribute('src'); video.load();
+  if (viewer.open) viewer.close();
+  if (changeURL) updateURL(null);
+  const opener = lastFocus; lastFocus = null;
+  if (opener?.isConnected) opener.focus({ preventScroll: true });
+  scheduleGalleryCleanup();
+}
 function openFromURL() { const id = new URL(location.href).searchParams.get('video'); if (!id) { if (viewer.open) closeViewer(false); return; } const index = videos.findIndex(item => item.id === id); if (index >= 0) openVideo(index, false); else toast('Esta recordação não foi encontrada no álbum.'); }
 async function togglePlay() { if (!video.paused) { video.pause(); return; } try { await video.play(); } catch { $('player-message').textContent = 'Não foi possível reproduzir. Tente novamente ou baixe o vídeo.'; } }
 function syncPlay() { const paused = video.paused; $('play').textContent = paused ? '▶ Reproduzir' : 'Ⅱ Pausar'; $('play').setAttribute('aria-label', paused ? 'Reproduzir' : 'Pausar'); $('big-play').hidden = !paused; }
@@ -113,7 +209,7 @@ $('share-url').addEventListener('copy', event => {
   if ($('share-url').selectionEnd <= $('share-url').selectionStart) return;
   setTimeout(() => { if (!event.defaultPrevented) recordShare(context, 'manual_copy'); }, 0);
 });
-$('load-more').addEventListener('click', () => { const nextIndex = rendered; renderMore(); $('gallery').children[nextIndex]?.focus({ preventScroll: true }); });
+$('load-more').addEventListener('click', () => { const group = renderMore(); group?.element.querySelector('.card')?.focus({ preventScroll: true }); });
 $('search').addEventListener('input', filterGallery); $('retry').addEventListener('click', loadCatalog);
 $('surprise').addEventListener('click', () => openVideo(Math.floor(Math.random() * videos.length)));
 $('close').addEventListener('click', () => closeViewer()); viewer.addEventListener('cancel', event => { event.preventDefault(); closeViewer(); });

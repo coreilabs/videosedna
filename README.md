@@ -38,6 +38,8 @@ Um único elemento de vídeo atende todo o álbum. As capas usam lazy loading, c
 
 Os vídeos são carregados somente ao abrir o player, sem autoplay. Player com pausa, progresso, som, tela cheia nativa, anterior/próximo, swipe horizontal e animação respeitando redução de movimento. Tela cheia usa os controles nativos do navegador.
 
+A galeria virtualiza grupos de 24 cartões: grupos a mais de 1000 px da área visível são substituídos por espaços com a mesma altura e recriados ao retornar. As imagens e cartões descartados deixam de ter referências no código, permitindo ao navegador liberar memória de renderização; o cache HTTP é preservado para evitar transferências desnecessárias. Apenas o catálogo de dados e pequenos contêineres de posição permanecem. Grupos com foco e o cartão que abriu o player são preservados, e há um botão de restauração acessível pelo teclado em cada espaço reservado. As alturas são recalculadas em mudanças de largura. Sem `IntersectionObserver`, a navegação continua pelo botão “Ver mais”, sem virtualização. A busca da página consulta o catálogo inteiro; a busca nativa do navegador encontra apenas cartões presentes naquele momento.
+
 `accessibility.css` define fontes principais e botões de 18 px, textos introdutórios de 20 px, maior contraste e alvos de toque de pelo menos 56 px nos controles. O player possui rótulos visíveis e reorganiza os controles em telas menores, permitindo rolagem vertical no diálogo para acessar todas as ações.
 
 Compartilhamento pelo sistema quando disponível, com cópia do link e campo selecionável como alternativas. O download aponta diretamente ao original no mesmo domínio; o comportamento de salvar depende do navegador, especialmente no iOS.
