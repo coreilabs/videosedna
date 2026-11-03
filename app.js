@@ -3,6 +3,7 @@ const $ = id => document.getElementById(id);
 const video = $('video'), viewer = $('viewer');
 let videos = [], filtered = [], rendered = 0, current = -1, lastFocus, toastTimer;
 let shareContext = null, shareBusy = false;
+let playback = null;
 const batch = 24;
 const windowMargin = 1000;
 let galleryGroups = [], resizeTimer, cleanupFrame;
@@ -157,18 +158,22 @@ async function loadCatalog() {
   } catch (error) { $('load-state').textContent = 'Não foi possível carregar o álbum. Verifique sua conexão e tente novamente.'; $('count').textContent = 'Álbum indisponível'; $('retry').hidden = false; }
 }
 function updateURL(id) { const url = new URL(location.href); if (id) url.searchParams.set('video', id); else url.searchParams.delete('video'); history.replaceState(null, '', url); }
-function openVideo(index, changeURL = true) {
+function openVideo(index, changeURL = true, source = 'gallery') {
   if (index < 0 || index >= videos.length) return;
   if (!viewer.open) { lastFocus = document.activeElement; viewer.showModal(); }
+  playback = null;
   current = index; const item = videos[index]; video.pause(); video.src = pathURL(item.file); video.poster = item.thumbnail ? thumbnailURL(item.thumbnail) : ''; video.load();
   viewer.setAttribute('aria-label', `Player — ${item.title}`);
   $('seek').value = 0; $('seek').disabled = true; $('time').textContent = '0:00 / 0:00'; $('player-message').textContent = ''; $('big-play').hidden = false;
   $('share-fallback').hidden = true; shareContext = null; $('download').href = pathURL(item.file); $('download').download = item.file.split('/').pop();
   $('previous').disabled = index === 0; $('next').disabled = index === videos.length - 1;
   video.classList.remove('portrait'); $('stage').classList.remove('swapping'); void $('stage').offsetWidth; $('stage').classList.add('swapping');
+  playback = { item, started: false, paused: false, completed: false, milestones: new Set() };
+  trackVideoEvent('video_open', item, { source });
   if (changeURL) updateURL(item.id);
 }
 function closeViewer(changeURL = true) {
+  playback = null;
   video.pause(); video.removeAttribute('src'); video.load();
   if (viewer.open) viewer.close();
   if (changeURL) updateURL(null);
@@ -176,18 +181,72 @@ function closeViewer(changeURL = true) {
   if (opener?.isConnected) opener.focus({ preventScroll: true });
   scheduleGalleryCleanup();
 }
-function openFromURL() { const id = new URL(location.href).searchParams.get('video'); if (!id) { if (viewer.open) closeViewer(false); return; } const index = videos.findIndex(item => item.id === id); if (index >= 0) openVideo(index, false); else toast('Esta recordação não foi encontrada no álbum.'); }
+function openFromURL() { const id = new URL(location.href).searchParams.get('video'); if (!id) { if (viewer.open) closeViewer(false); return; } const index = videos.findIndex(item => item.id === id); if (index >= 0) openVideo(index, false, 'direct_link'); else toast('Esta recordação não foi encontrada no álbum.'); }
 async function togglePlay() { if (!video.paused) { video.pause(); return; } try { await video.play(); } catch { $('player-message').textContent = 'Não foi possível reproduzir. Tente novamente ou baixe o vídeo.'; } }
 function syncPlay() { const paused = video.paused; $('play').textContent = paused ? '▶ Reproduzir' : 'Ⅱ Pausar'; $('play').setAttribute('aria-label', paused ? 'Reproduzir' : 'Pausar'); $('big-play').hidden = !paused; }
-function trackVideoEvent(name, item, parameters = {}) {
-  if (!item || typeof window.gtag !== 'function') return;
-  try {
-    window.gtag('event', name, {
-      send_to: 'G-Z8FKSNN38X', content_type: 'video', item_id: item.id,
-      video_title: item.title, ...parameters
-    });
-  } catch { /* Analytics must never interrupt sharing. */ }
+function trackEvent(name, parameters = {}) {
+  if (typeof window.gtag !== 'function') return;
+  try { window.gtag('event', name, { send_to: 'G-Z8FKSNN38X', ...parameters }); }
+  catch { /* Metrics must never interrupt the album. */ }
 }
+function trackVideoEvent(name, item, parameters = {}) {
+  if (!item) return;
+  trackEvent(name, { content_type: 'video', item_id: item.id, video_title: item.title,
+    file_name: item.file.split('/').pop(), ...parameters });
+}
+function trackPlayback(name, parameters = {}) {
+  if (!playback || video.currentSrc !== pathURL(playback.item.file)) return;
+  trackVideoEvent(name, playback.item, {
+    video_current_time: Number.isFinite(video.currentTime) ? Math.round(video.currentTime) : 0,
+    video_duration: Number.isFinite(video.duration) ? Math.round(video.duration) : 0, ...parameters
+  });
+}
+// One semantic event per click; playback outcomes are separate from control intent.
+document.addEventListener('click', event => {
+  const control = event.target.closest('button, a, input[type="range"], video');
+  if (!control || control.disabled || control.classList.contains('card')) return;
+  if (control.id === 'share') return; // shareCurrent records accepted attempts.
+  if (control.id === 'download') {
+    trackVideoEvent('video_download_click', playback?.item, { link_url: control.href }); return;
+  }
+  if (control.matches('a[href]')) {
+    trackEvent('navigation_click', { link_url: control.href,
+      link_text: control.textContent.trim().replace(/\s+/g, ' ').slice(0, 100),
+      location: control.closest('header') ? 'header' : 'content' }); return;
+  }
+  const parameters = { action: control.id || (control.classList.contains('restore-group') ? 'restore_group' : 'button') };
+  if (viewer.contains(control)) trackVideoEvent('ui_click', playback?.item, parameters);
+  else trackEvent('ui_click', parameters);
+}, true);
+video.addEventListener('playing', () => {
+  if (!playback || video.currentSrc !== pathURL(playback.item.file)) return;
+  if (!playback.started) { trackPlayback('video_start'); playback.started = true; }
+  else if (playback.paused) trackPlayback('video_resume');
+  playback.paused = false;
+});
+video.addEventListener('pause', () => {
+  if (!playback || !playback.started || video.ended || playback.paused || video.currentTime === 0) return;
+  trackPlayback('video_pause'); playback.paused = true;
+});
+video.addEventListener('timeupdate', () => {
+  if (!playback?.started || !Number.isFinite(video.duration) || video.duration <= 0 || video.seeking) return;
+  const percent = video.currentTime / video.duration * 100;
+  // Milestones describe position reached, including seeking, not watch time.
+  for (const milestone of [25, 50, 75]) {
+    if (percent >= milestone && !playback.milestones.has(milestone)) {
+      playback.milestones.add(milestone); trackPlayback('video_progress', { video_percent: milestone });
+    }
+  }
+});
+video.addEventListener('ended', () => {
+  if (!playback?.started || playback.completed) return;
+  playback.completed = true; playback.paused = true; trackPlayback('video_complete');
+});
+video.addEventListener('error', () => {
+  if (playback && video.getAttribute('src') === pathURL(playback.item.file)) {
+    trackVideoEvent('video_error', playback.item, { error_code: video.error?.code || 0 });
+  }
+});
 function recordShare(context, method) {
   if (!context || context.recorded) return;
   context.recorded = true;
@@ -230,7 +289,7 @@ $('share-url').addEventListener('copy', event => {
 });
 $('load-more').addEventListener('click', () => { const group = renderMore(); group?.element.querySelector('.card')?.focus({ preventScroll: true }); });
 $('search').addEventListener('input', filterGallery); $('retry').addEventListener('click', loadCatalog);
-$('surprise').addEventListener('click', () => openVideo(Math.floor(Math.random() * videos.length)));
+$('surprise').addEventListener('click', () => openVideo(Math.floor(Math.random() * videos.length), true, 'surprise'));
 $('close').addEventListener('click', () => closeViewer()); viewer.addEventListener('cancel', event => { event.preventDefault(); closeViewer(); });
 viewer.addEventListener('click', event => { if (event.target === viewer) { const bounds = viewer.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeViewer(); } });
 $('play').addEventListener('click', togglePlay); $('big-play').addEventListener('click', togglePlay); video.addEventListener('click', togglePlay);
@@ -243,10 +302,10 @@ video.addEventListener('error', () => { if (video.getAttribute('src')) $('player
 $('seek').addEventListener('input', () => { if (Number.isFinite(video.duration)) video.currentTime = Number($('seek').value) / 1000 * video.duration; });
 $('mute').addEventListener('click', () => { video.muted = !video.muted; $('mute').textContent = video.muted ? '×♪ Sem som' : '♪ Som ligado'; $('mute').setAttribute('aria-label', video.muted ? 'Ativar som' : 'Silenciar'); $('mute').setAttribute('aria-pressed', String(video.muted)); });
 $('fullscreen').addEventListener('click', async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else if (video.requestFullscreen) await video.requestFullscreen(); else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen(); else toast('Use a opção de tela cheia do seu navegador.'); } catch { toast('Tela cheia indisponível neste navegador.'); } });
-$('previous').addEventListener('click', () => openVideo(current - 1)); $('next').addEventListener('click', () => openVideo(current + 1)); $('share').addEventListener('click', shareCurrent); $('copy').addEventListener('click', copyShare);
-viewer.addEventListener('keydown', event => { if (event.target.matches('input')) return; if (event.key === 'ArrowRight') { event.preventDefault(); openVideo(current + 1); } if (event.key === 'ArrowLeft') { event.preventDefault(); openVideo(current - 1); } if (event.key === ' ' && !event.target.matches('button,a')) { event.preventDefault(); togglePlay(); } });
+$('previous').addEventListener('click', () => openVideo(current - 1, true, 'previous')); $('next').addEventListener('click', () => openVideo(current + 1, true, 'next')); $('share').addEventListener('click', shareCurrent); $('copy').addEventListener('click', copyShare);
+viewer.addEventListener('keydown', event => { if (event.target.matches('input')) return; if (event.key === 'ArrowRight') { event.preventDefault(); openVideo(current + 1, true, 'next'); } if (event.key === 'ArrowLeft') { event.preventDefault(); openVideo(current - 1, true, 'previous'); } if (event.key === ' ' && !event.target.matches('button,a')) { event.preventDefault(); togglePlay(); } });
 let touchStart;
 $('stage').addEventListener('touchstart', event => { if (event.touches.length === 1) touchStart = { x: event.touches[0].clientX, y: event.touches[0].clientY }; }, { passive: true });
-$('stage').addEventListener('touchend', event => { if (!touchStart) return; const deltaX = event.changedTouches[0].clientX - touchStart.x; const deltaY = event.changedTouches[0].clientY - touchStart.y; if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) openVideo(current + (deltaX < 0 ? 1 : -1)); touchStart = null; }, { passive: true });
+$('stage').addEventListener('touchend', event => { if (!touchStart) return; const deltaX = event.changedTouches[0].clientX - touchStart.x; const deltaY = event.changedTouches[0].clientY - touchStart.y; if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) openVideo(current + (deltaX < 0 ? 1 : -1), true, 'swipe'); touchStart = null; }, { passive: true });
 $('stage').addEventListener('touchcancel', () => { touchStart = null; }, { passive: true });
 window.addEventListener('popstate', openFromURL); loadCatalog();
